@@ -1,0 +1,103 @@
+---
+title: "Exploring the BRFSS data"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+## Setup
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+```
+
+```{r load-data}
+load("brfss2013.RData")
+```
+
+* * *
+
+## Part 1: Data
+
+The data is collected through a telephone survey, which could imply a certain bias on people that does not have a phone or people that work too much to answer calls. Of course, they try to avoid that dividing calls between weekdays, weekends, calling on appointed times and during hours outside the typical working day, but still there could be a slight bias. There is no perfect method, so it is a trade-off. 
+
+The questions are asked by each state, that could induce to a political bias depending on who is in power at that time, but they try to avoid that asking standard core questions for all the states, pre-established optional modules and cognitively testing each question that a state proposes. 
+
+Each state needs a minimum sample of 4000, but if they choose to split the sample, each split needs a minimum size of 2500. Each state proposes the geographical are that they want to survey, then the CDC provides a random samples of telephone numbers in that area. The number could be mobile phones or landlines. 
+If the number is a mobile phone, it is considered an adult household and they are picked via random sampling. If the number is a landline, the data of each member of the household is collected. Then, from each household, the data is picked via random sampling of the members. The landline numbers are picked using Disproportionate stratified sampling, which in this case means that they have two stratas of numbers based on density population areas.
+* * *
+
+## Part 2: Research question
+
+**Research question:**
+
+Is there an association between sleep duration and the number of days of poor mental health reported?
+
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+
+```{r}
+sleep_na <- sum(is.na(brfss2013$sleptim1)) / nrow(brfss2013) * 100
+mhealth_na <- sum(is.na(brfss2013$menthlth)) / nrow(brfss2013) * 100
+sex_na <- sum(is.na(brfss2013$sex)) / nrow(brfss2013) * 100
+sleep_77 <- sum(brfss2013$sleptim1 == 77, na.rm = TRUE) / nrow(brfss2013) * 100
+sleep_99 <- sum(brfss2013$sleptim1 == 99, na.rm = TRUE) / nrow(brfss2013) * 100
+mhealth_77 <- sum(brfss2013$menthlth == 77, na.rm=TRUE) / nrow(brfss2013) * 100
+mhealth_99 <- sum(brfss2013$menthlth == 99, na.rm=TRUE) / nrow(brfss2013) * 100
+```
+
+Here, on the chunk above, I am calculating the percentages of NULL values of the columns that are of interest for this research question. As every percentage is lower than 5% I will drop the rows with the null values.
+
+The values "77" and "99" on the sleptim1 and menhlth variables are non-valid responses. As such they will be treated as null values, first I calculated their percentages and then I will drop them if appropriate. As we can see, the percentage is 0 meaning that there are no 77 or 99 values. I checked the code book, and it seems that the values should not be 0, so perhaps the data set was already pre-processed.
+
+```{r}
+brfss_q1 <- brfss2013 %>%
+  select(sleptim1, menthlth, sex) %>%
+  mutate(menthlth = ifelse(menthlth == 88, 0, menthlth)) %>%
+  filter(!is.na(sleptim1), !is.na(menthlth), !is.na(sex))
+
+```
+
+Above, I created a separate data frame that contains only the columns I want, so the original data is not damaged. Note that, as said before, I dropped the rows with null, "99" or "77" values. Also, I remapped the "88" values on the menhlth variable to "0", since 88 just means that the respondent didn't have bad days.
+
+On the following chunk, I created a new column for this data frame called "sleep_category", which divides the hour of sleep into three categories (less than 6, 6 to 8 and more then 8). These categories were chosen because most studies suggest a similar distribution. But, nonetheless, I represented the sleptim1 variable using a histogram to see if in this dataset the hours of sleep cluster into similar values.
+
+```{r}
+ggplot(data = brfss_q1, aes(x=sleptim1)) +
+  geom_histogram()
+```
+
+```{r}
+brfss_q1 <- brfss_q1 %>%
+  mutate(sleep_category=case_when(sleptim1 > 8 ~ ">8",
+                                  sleptim1 < 6 ~ "<6",
+                                  sleptim1 >= 6 & sleptim1 <= 8 ~ "6-8"))
+```
+
+Below, I created a histogram to see the distribution of the menhlth variable, as this is the response variable. If the distribution is skewed, I will use the median as measure, because it is a more robust to extreme values than the mean.
+
+```{r}
+ggplot(data = brfss_q1, aes(x=menthlth)) +
+  geom_histogram()
+```
+
+After, I build the graph to illustrate the research question. In preparation for the graph, I have to create a new data frame with the variables I need. For the menhlth variable, I said I was going to use the median to show a more robust measurement, but the distribution was so skewed that the median was 0. Therefore, to make the graph more informative I decided to show the proportion of at least 1 bad day in each sleep category.
+
+```{r}
+x <- brfss_q1 %>%
+  group_by(sex, sleep_category) %>%
+  summarise(bad_days = mean(menthlth > 0) * 100)
+```
+```{r}
+ggplot(data = x, aes(x=sleep_category, y = bad_days, fill = sex)) +
+  geom_col(position ="dodge")
+```
+
+Finally, the graph shows that people who slept between 6 and 8 hours have less mental health bad days than the rest. But, there is no much difference with the group that sleeps more than 8 hours. By far, people that sleeps less than 6 hours has the most mental health bad days. This can guides to think that there is an association between sleeping less than 6 hours and more mental health problems. 
+The graph also shows that women on general say to have more bad mental health days, that could be because, specially in older generations, there is a taboo in men about mental health.
