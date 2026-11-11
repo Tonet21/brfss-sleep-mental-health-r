@@ -2,6 +2,7 @@
 
 An exploratory analysis in R of whether the number of hours a person sleeps is associated with the number of days they report poor mental health, using the CDC's 2013 Behavioral Risk Factor Surveillance System (BRFSS) survey.
 
+**Full report:** [Full Analysis](https://tonet21.github.io/brfss-sleep-mental-health-r/Analysis.html)
 
 ## Research question
 
